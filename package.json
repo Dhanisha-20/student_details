@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test_endpoints.js"
+    "test": "node test_endpoints.js",
+    "db:view": "node view_db.js"
   },
   "keywords": [],
   "author": "",
