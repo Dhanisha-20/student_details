@@ -126,3 +126,18 @@ To verify that all endpoints and database operations are working properly:
 npm test
 ```
 All 8 integration test scenarios will run and report status.
+
+---
+
+## ☁️ Deploying to Vercel
+
+The repository is configured for 1-click Vercel deployment:
+
+1. Import your GitHub repository (`Dhanisha-20/student_details`) into **Vercel**.
+2. Keep the Framework Preset as **Other** (Vercel automatically detects `vercel.json` and `api/index.js`).
+3. Click **Deploy**.
+4. Vercel will:
+   - Serve static frontend assets (`public/index.html`, `public/css/style.css`, `public/js/app.js`) at the root `/`.
+   - Route all `/api/*` endpoints to the serverless function (`api/index.js`).
+   - Run the database engine with fallback for serverless environments.
+
