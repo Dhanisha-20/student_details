@@ -35,7 +35,11 @@ Built with **HTML5, CSS3, JavaScript** on the frontend and **Node.js, Express, a
    - Real-time search/filter across Name, D-Number, and Specialization.
    - Direct "View", "Edit", and "Delete" buttons for each student.
 
-5. **Department Stats Ribbon**:
+5. **✨ Free AI Data Generation & Mentor Reports (Google Gemini API)**:
+   - **AI Student Data Generator**: Use a free Gemini API key (from [Google AI Studio](https://aistudio.google.com)) to dynamically generate authentic MCA student profiles and automatically insert them into SQLite.
+   - **AI Mentor Assessment**: Click **"✨ AI Mentor Report"** on any student dossier to generate a personalized faculty assessment, project evaluation, semester advice, and placement readiness forecast.
+
+6. **Department Stats Ribbon**:
    - Live summary ribbon showing Total Enrolled Students, Average CGPA, and Average Attendance.
 
 ---

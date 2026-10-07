@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
+const { generateStudentWithAI, generateAcademicReport } = require('./gemini');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -165,6 +166,59 @@ app.get('/api/stats', (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 7. AI: Generate Student Data with Google Gemini API
+app.post('/api/ai/generate-student', async (req, res) => {
+  try {
+    const { apiKey, semester, specialization } = req.body;
+    const generated = await generateStudentWithAI(apiKey, { semester, specialization });
+    
+    // Save generated student to database
+    const saved = db.createStudent(generated);
+
+    res.status(201).json({
+      success: true,
+      message: `Generated and registered student ${saved.dnumber} (${saved.full_name})!`,
+      source: generated.source,
+      data: saved
+    });
+  } catch (error) {
+    console.error('Error generating AI student:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate student data with AI.'
+    });
+  }
+});
+
+// 8. AI: Generate Academic Report for Student
+app.post('/api/ai/academic-report', async (req, res) => {
+  try {
+    const { apiKey, dnumber } = req.body;
+    if (!dnumber) {
+      return res.status(400).json({ success: false, message: 'D-Number is required.' });
+    }
+
+    const student = db.getStudent(dnumber);
+    if (!student) {
+      return res.status(404).json({ success: false, message: `Student ${dnumber} not found.` });
+    }
+
+    const report = await generateAcademicReport(apiKey, student);
+    res.json({
+      success: true,
+      dnumber: student.dnumber,
+      studentName: student.full_name,
+      report
+    });
+  } catch (error) {
+    console.error('Error generating report:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate academic report.'
+    });
   }
 });
 

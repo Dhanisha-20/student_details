@@ -685,6 +685,206 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
+  // =========================================================================
+  // Google Gemini AI Data Generator & Academic Reports
+  // =========================================================================
+  const geminiApiKey = document.getElementById('geminiApiKey');
+  const btnToggleApiKey = document.getElementById('btnToggleApiKey');
+  const btnSaveApiKey = document.getElementById('btnSaveApiKey');
+  const aiSemester = document.getElementById('aiSemester');
+  const aiSpecialization = document.getElementById('aiSpecialization');
+  const btnGenerateAiStudent = document.getElementById('btnGenerateAiStudent');
+  const aiBtnSpinner = document.getElementById('aiBtnSpinner');
+  const aiBtnText = document.getElementById('aiBtnText');
+  const aiResultPreview = document.getElementById('aiResultPreview');
+  const aiPreviewBody = document.getElementById('aiPreviewBody');
+  const aiSourceBadge = document.getElementById('aiSourceBadge');
+  const btnViewAiStudent = document.getElementById('btnViewAiStudent');
+  const btnGenerateAnotherAi = document.getElementById('btnGenerateAnotherAi');
+
+  const btnAiMentorReport = document.getElementById('btnAiMentorReport');
+  const aiReportBox = document.getElementById('aiReportBox');
+  const aiReportLoading = document.getElementById('aiReportLoading');
+  const aiReportContent = document.getElementById('aiReportContent');
+  const btnCloseAiReport = document.getElementById('btnCloseAiReport');
+
+  let lastGeneratedAiDnumber = null;
+
+  // Load saved API key from localStorage
+  const savedApiKey = localStorage.getItem('mca_gemini_api_key');
+  if (savedApiKey && geminiApiKey) {
+    geminiApiKey.value = savedApiKey;
+  }
+
+  // Toggle API key visibility
+  if (btnToggleApiKey) {
+    btnToggleApiKey.addEventListener('click', () => {
+      const isPass = geminiApiKey.type === 'password';
+      geminiApiKey.type = isPass ? 'text' : 'password';
+      btnToggleApiKey.textContent = isPass ? '🔒' : '👁️';
+    });
+  }
+
+  // Save API key
+  if (btnSaveApiKey) {
+    btnSaveApiKey.addEventListener('click', () => {
+      const val = geminiApiKey.value.trim();
+      localStorage.setItem('mca_gemini_api_key', val);
+      showToast(val ? 'Gemini API Key saved in browser storage!' : 'API Key cleared.', 'success');
+    });
+  }
+
+  // Generate Student via AI
+  if (btnGenerateAiStudent) {
+    btnGenerateAiStudent.addEventListener('click', async () => {
+      const apiKey = geminiApiKey ? geminiApiKey.value.trim() : '';
+      const semester = aiSemester ? aiSemester.value : '3';
+      const specialization = aiSpecialization ? aiSpecialization.value : 'Artificial Intelligence & Data Science';
+
+      btnGenerateAiStudent.disabled = true;
+      aiBtnSpinner.style.display = 'inline-block';
+      aiBtnText.textContent = 'Generating via Gemini AI...';
+
+      try {
+        const response = await fetch('/api/ai/generate-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey, semester, specialization })
+        });
+        const data = await response.json();
+
+        btnGenerateAiStudent.disabled = false;
+        aiBtnSpinner.style.display = 'none';
+        aiBtnText.textContent = '✨ Generate & Save Student to Database';
+
+        if (response.ok && data.success && data.data) {
+          const s = data.data;
+          lastGeneratedAiDnumber = s.dnumber;
+          aiSourceBadge.textContent = data.source || 'Google Gemini AI';
+
+          aiPreviewBody.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+              <span style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 700; color: var(--primary);">${escapeHtml(s.dnumber)}</span>
+              <strong style="font-size: 1.15rem;">${escapeHtml(s.full_name)}</strong>
+              <span class="tag tag-indigo">Semester ${s.semester} (${escapeHtml(s.batch)})</span>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 0.75rem;">
+              Track: <strong>${escapeHtml(s.specialization)}</strong> • Guide: <strong>${escapeHtml(s.mentor_name)}</strong>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; background: var(--bg-subtle); padding: 0.75rem; border-radius: var(--radius-sm); margin-bottom: 0.75rem;">
+              <div><small style="color: var(--text-muted); display: block;">CGPA</small><strong>${s.cgpa} / 10</strong></div>
+              <div><small style="color: var(--text-muted); display: block;">SGPA</small><strong>${s.sgpa} / 10</strong></div>
+              <div><small style="color: var(--text-muted); display: block;">Attendance</small><strong>${s.attendance}%</strong></div>
+            </div>
+            <div style="font-size: 0.85rem;">
+              <strong>Project:</strong> <em>${escapeHtml(s.mini_project_title)}</em>
+            </div>
+          `;
+
+          aiResultPreview.style.display = 'block';
+          showToast(`Student ${s.dnumber} created and saved to SQLite!`, 'success');
+          fetchStats();
+        } else {
+          showToast(data.message || 'Generation failed.', 'error');
+        }
+      } catch (err) {
+        btnGenerateAiStudent.disabled = false;
+        aiBtnSpinner.style.display = 'none';
+        aiBtnText.textContent = '✨ Generate & Save Student to Database';
+        console.error('Error generating student via AI:', err);
+        showToast('Connection to AI service failed.', 'error');
+      }
+    });
+  }
+
+  if (btnViewAiStudent) {
+    btnViewAiStudent.addEventListener('click', () => {
+      if (lastGeneratedAiDnumber) {
+        switchTab('searchTab');
+        dnumberInput.value = lastGeneratedAiDnumber;
+        clearSearchBtn.style.display = 'inline-block';
+        searchStudent(lastGeneratedAiDnumber);
+      }
+    });
+  }
+
+  if (btnGenerateAnotherAi) {
+    btnGenerateAnotherAi.addEventListener('click', () => {
+      aiResultPreview.style.display = 'none';
+      if (btnGenerateAiStudent) btnGenerateAiStudent.click();
+    });
+  }
+
+  // AI Mentor Report Generation
+  if (btnAiMentorReport) {
+    btnAiMentorReport.addEventListener('click', async () => {
+      if (!currentStudentData) return;
+      const apiKey = geminiApiKey ? geminiApiKey.value.trim() : (localStorage.getItem('mca_gemini_api_key') || '');
+
+      aiReportBox.style.display = 'block';
+      aiReportLoading.style.display = 'block';
+      aiReportContent.innerHTML = '';
+      aiReportBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      try {
+        const response = await fetch('/api/ai/academic-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: apiKey,
+            dnumber: currentStudentData.dnumber
+          })
+        });
+        const data = await response.json();
+
+        aiReportLoading.style.display = 'none';
+
+        if (response.ok && data.success && data.report) {
+          // Parse basic markdown to HTML
+          const formattedHtml = parseMarkdownToHtml(data.report);
+          aiReportContent.innerHTML = formattedHtml;
+          showToast('AI Mentor Assessment generated!', 'success');
+        } else {
+          aiReportContent.innerHTML = `<p style="color: var(--danger);">Unable to generate report: ${escapeHtml(data.message || 'Error')}</p>`;
+        }
+      } catch (err) {
+        aiReportLoading.style.display = 'none';
+        aiReportContent.innerHTML = `<p style="color: var(--danger);">Network error contacting AI service.</p>`;
+      }
+    });
+  }
+
+  if (btnCloseAiReport) {
+    btnCloseAiReport.addEventListener('click', () => {
+      aiReportBox.style.display = 'none';
+    });
+  }
+
+  // Basic markdown formatter for AI reports
+  function parseMarkdownToHtml(md) {
+    if (!md) return '';
+    let html = escapeHtml(md);
+
+    // Headers
+    html = html.replace(/### (.*?)(?:\n|$)/g, '<h3>$1</h3>');
+    html = html.replace(/## (.*?)(?:\n|$)/g, '<h3>$1</h3>');
+
+    // Bold
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Italics
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Bullet points
+    html = html.replace(/(?:^|\n)- (.*?)(?=(?:\n- )|(?:\n\n)|$)/g, '\n<li>$1</li>');
+    html = html.replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>');
+
+    // Paragraph breaks
+    html = html.replace(/\n\n+/g, '<br><br>');
+
+    return html;
+  }
+
   // Initial Data Fetch
   fetchStats();
 

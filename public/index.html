@@ -32,6 +32,9 @@
         <button class="nav-tab" data-tab="directoryTab" role="tab" aria-selected="false">
           <span class="tab-icon">📋</span> MCA Directory
         </button>
+        <button class="nav-tab" data-tab="aiTab" role="tab" aria-selected="false">
+          <span class="tab-icon">✨</span> AI Data Generator
+        </button>
       </nav>
 
       <div class="db-status-pill">
@@ -162,6 +165,9 @@
           </div>
 
           <div class="hero-actions">
+            <button type="button" id="btnAiMentorReport" class="btn btn-ai-gradient btn-sm" title="Generate AI Faculty Advisor Assessment">
+              ✨ AI Mentor Report
+            </button>
             <button type="button" id="btnPrintProfile" class="btn btn-secondary btn-sm" title="Print Student Dossier">
               🖨️ Print Slip
             </button>
@@ -281,6 +287,22 @@
             </div>
           </div>
 
+        </div>
+
+        <!-- AI Mentor Report Box -->
+        <div id="aiReportBox" class="ai-report-box" style="display: none;">
+          <div class="ai-report-header">
+            <div class="ai-title-wrap">
+              <span class="ai-badge">Google Gemini AI</span>
+              <h4>✨ Faculty Mentor Assessment & Recommendations</h4>
+            </div>
+            <button type="button" id="btnCloseAiReport" class="clear-btn" title="Close report">✕</button>
+          </div>
+          <div id="aiReportLoading" class="ai-report-loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing academic trajectory with Gemini AI...</p>
+          </div>
+          <div id="aiReportContent" class="ai-report-content"></div>
         </div>
 
       </div>
@@ -580,6 +602,101 @@
         <div id="directoryEmptyNotice" class="table-empty" style="display: none;">
           No matching MCA student records found.
         </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 4: AI STUDENT DATA GENERATOR ================= -->
+    <section id="aiTab" class="tab-pane" role="tabpanel">
+      <div class="ai-generator-card">
+        <div class="ai-card-header">
+          <span class="ai-badge">✨ Powered by Google Gemini API</span>
+          <h2>AI MCA Student Data Generator</h2>
+          <p>Generate authentic MCA student records with realistic Indian names, project titles, mentors, marks, and attendance using a free Gemini API key, and automatically store them in the database.</p>
+        </div>
+
+        <div class="ai-config-grid">
+          <!-- Column 1: API Key Setup -->
+          <div class="ai-box">
+            <div class="ai-box-title">
+              <span class="box-icon">🔑</span>
+              <h3>1. Free API Key Setup</h3>
+            </div>
+            <div class="form-group">
+              <label for="geminiApiKey">Google Gemini API Key</label>
+              <div class="api-key-input-wrap">
+                <input 
+                  type="password" 
+                  id="geminiApiKey" 
+                  placeholder="Paste free Gemini API key (AIzaSy...)" 
+                  autocomplete="off"
+                >
+                <button type="button" id="btnToggleApiKey" class="btn btn-secondary btn-sm" title="Toggle Visibility">👁️</button>
+                <button type="button" id="btnSaveApiKey" class="btn btn-secondary btn-sm" title="Save key in browser">Save</button>
+              </div>
+              <div class="api-key-helper">
+                <span>Free Tier (No Credit Card):</span> 
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Get a free key from Google AI Studio ↗</a>
+              </div>
+              <span class="field-hint">Key is saved securely in your browser's localStorage. Leave blank to run in simulated AI mode.</span>
+            </div>
+          </div>
+
+          <!-- Column 2: Parameters & Action -->
+          <div class="ai-box">
+            <div class="ai-box-title">
+              <span class="box-icon">⚙️</span>
+              <h3>2. Data Generation Parameters</h3>
+            </div>
+            <div class="form-row col-2">
+              <div class="form-group">
+                <label for="aiSemester">Target Semester</label>
+                <select id="aiSemester">
+                  <option value="1">Semester 1 (Year 1)</option>
+                  <option value="2">Semester 2 (Year 1)</option>
+                  <option value="3" selected>Semester 3 (Year 2)</option>
+                  <option value="4">Semester 4 (Final)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="aiSpecialization">MCA Specialization Track</label>
+                <select id="aiSpecialization">
+                  <option value="Artificial Intelligence & Data Science">AI & Data Science</option>
+                  <option value="Full Stack Web Development">Full Stack Web Dev</option>
+                  <option value="Cloud Computing & DevOps">Cloud & DevOps</option>
+                  <option value="Cyber Security & Cryptography">Cyber Security</option>
+                  <option value="Software Systems & Design">Software Systems</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="ai-action-wrap">
+              <button type="button" id="btnGenerateAiStudent" class="btn btn-ai-gradient btn-lg">
+                <span class="btn-spinner" id="aiBtnSpinner" style="display:none;"></span>
+                <span id="aiBtnText">✨ Generate & Save Student to Database</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generated Result Preview Box -->
+        <div id="aiResultPreview" class="ai-result-preview" style="display: none;">
+          <div class="preview-header">
+            <h4>✅ Successfully Generated & Saved into Database</h4>
+            <span id="aiSourceBadge" class="source-badge">Google Gemini 1.5 Flash</span>
+          </div>
+          <div class="preview-body" id="aiPreviewBody">
+            <!-- Dynamically populated -->
+          </div>
+          <div class="preview-actions">
+            <button type="button" id="btnViewAiStudent" class="btn btn-primary btn-sm">
+              🔍 View in Profile Dossier
+            </button>
+            <button type="button" id="btnGenerateAnotherAi" class="btn btn-secondary btn-sm">
+              ✨ Generate Another Record
+            </button>
+          </div>
+        </div>
+
       </div>
     </section>
 

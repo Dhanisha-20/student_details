@@ -86,6 +86,20 @@ async function runTests() {
   const r7 = await request('/');
   console.log('Test 7 - GET / (Static index.html):', r7.status === 200 && typeof r7.data === 'string' && r7.data.includes('MCA Student Portal') ? 'PASS ✅' : 'FAIL ❌');
 
+  // Test 8: AI Student Generation (POST /api/ai/generate-student)
+  const r8 = await request('/api/ai/generate-student', 'POST', { semester: 3, specialization: 'Artificial Intelligence & Data Science' });
+  console.log('Test 8 - POST /api/ai/generate-student:', r8.status === 201 && r8.data.success && r8.data.data.dnumber ? 'PASS ✅' : 'FAIL ❌');
+  console.log('   AI Student Created:', r8.data.data ? `${r8.data.data.dnumber}: ${r8.data.data.full_name} (${r8.data.source || 'AI'})` : 'N/A');
+
+  // Test 9: AI Academic Mentor Report (POST /api/ai/academic-report)
+  const r9 = await request('/api/ai/academic-report', 'POST', { dnumber: r8.data.data.dnumber });
+  console.log('Test 9 - POST /api/ai/academic-report:', r9.status === 200 && r9.data.success && typeof r9.data.report === 'string' ? 'PASS ✅' : 'FAIL ❌');
+
+  // Cleanup AI test student
+  if (r8.data.data?.dnumber) {
+    await request(`/api/students/${r8.data.data.dnumber}`, 'DELETE');
+  }
+
   console.log('--- All Tests Completed Successfully! ---');
 }
 
