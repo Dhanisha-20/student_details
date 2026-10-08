@@ -112,8 +112,16 @@ document.addEventListener('DOMContentLoaded', () => {
       pane.classList.toggle('active', pane.id === tabId);
     });
 
+    const portalScreenEl = document.getElementById('portalScreen');
+    if (portalScreenEl && portalScreenEl.style.display === 'none') {
+      portalScreenEl.style.display = 'block';
+    }
+
     if (tabId === 'directoryTab') {
       loadDirectory();
+    }
+    if (tabId === 'securityTab') {
+      loadSecurityLab();
     }
   }
 
@@ -884,6 +892,607 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return html;
   }
+
+  // =========================================================================
+  // USER AUTHENTICATION & SESSION MANAGEMENT
+  // =========================================================================
+
+  const authSection = document.getElementById('authSection');
+  const portalScreen = document.getElementById('portalScreen');
+  const userHeaderProfile = document.getElementById('userHeaderProfile');
+  const userHeaderAvatar = document.getElementById('userHeaderAvatar');
+  const userHeaderName = document.getElementById('userHeaderName');
+  const userHeaderRole = document.getElementById('userHeaderRole');
+  const headerLoginBtn = document.getElementById('headerLoginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const btnBypassToLab = document.getElementById('btnBypassToLab');
+
+  const tabBtnSignIn = document.getElementById('tabBtnSignIn');
+  const tabBtnRegister = document.getElementById('tabBtnRegister');
+  const signInForm = document.getElementById('signInForm');
+  const registerForm = document.getElementById('registerForm');
+
+  const loginUsername = document.getElementById('loginUsername');
+  const loginPassword = document.getElementById('loginPassword');
+  const btnLoginSubmit = document.getElementById('btnLoginSubmit');
+  const loginSpinner = document.getElementById('loginSpinner');
+  const toggleLoginPassVisibility = document.getElementById('toggleLoginPassVisibility');
+
+  const regUsername = document.getElementById('regUsername');
+  const regUserFullName = document.getElementById('regUserFullName');
+  const regEmail = document.getElementById('regEmail');
+  const regRole = document.getElementById('regRole');
+  const regPassword = document.getElementById('regPassword');
+  const regAlgorithm = document.getElementById('regAlgorithm');
+  const btnRegisterSubmit = document.getElementById('btnRegisterSubmit');
+  const regSpinner = document.getElementById('regSpinner');
+  const toggleRegPassVisibility = document.getElementById('toggleRegPassVisibility');
+  const passStrengthBar = document.getElementById('passStrengthBar');
+  const passStrengthLabel = document.getElementById('passStrengthLabel');
+
+  const demoPills = document.querySelectorAll('.demo-pill');
+
+  let currentAuthUser = null;
+
+  // Toggle Login vs Register Tabs
+  if (tabBtnSignIn && tabBtnRegister) {
+    tabBtnSignIn.addEventListener('click', () => {
+      tabBtnSignIn.classList.add('active');
+      tabBtnRegister.classList.remove('active');
+      if (signInForm) signInForm.style.display = 'flex';
+      if (registerForm) registerForm.style.display = 'none';
+    });
+
+    tabBtnRegister.addEventListener('click', () => {
+      tabBtnRegister.classList.add('active');
+      tabBtnSignIn.classList.remove('active');
+      if (registerForm) registerForm.style.display = 'flex';
+      if (signInForm) signInForm.style.display = 'none';
+    });
+  }
+
+  // Quick Demo Pills 1-click login
+  demoPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const user = pill.dataset.user;
+      const pass = pill.dataset.pass;
+      if (tabBtnSignIn) tabBtnSignIn.click();
+      if (loginUsername) loginUsername.value = user;
+      if (loginPassword) loginPassword.value = pass;
+      if (btnLoginSubmit) btnLoginSubmit.click();
+    });
+  });
+
+  // Password Visibility Toggles
+  function setupPassToggle(btn, input) {
+    if (!btn || !input) return;
+    btn.addEventListener('click', () => {
+      const isPass = input.type === 'password';
+      input.type = isPass ? 'text' : 'password';
+      btn.textContent = isPass ? '🔒' : '👁️';
+    });
+  }
+  setupPassToggle(toggleLoginPassVisibility, loginPassword);
+  setupPassToggle(toggleRegPassVisibility, regPassword);
+
+  // Live Registration Password Strength Meter
+  if (regPassword) {
+    regPassword.addEventListener('input', () => {
+      const val = regPassword.value;
+      let score = 0;
+      if (val.length >= 6) score++;
+      if (val.length >= 10) score++;
+      if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+
+      if (val.length === 0) {
+        if (passStrengthBar) {
+          passStrengthBar.style.width = '0%';
+          passStrengthBar.style.backgroundColor = 'var(--danger)';
+        }
+        if (passStrengthLabel) passStrengthLabel.textContent = 'Password strength: Empty';
+        return;
+      }
+
+      if (score <= 2) {
+        if (passStrengthBar) {
+          passStrengthBar.style.width = '30%';
+          passStrengthBar.style.backgroundColor = 'var(--danger)';
+        }
+        if (passStrengthLabel) passStrengthLabel.textContent = 'Password strength: Weak (easy to dictionary attack)';
+      } else if (score <= 4) {
+        if (passStrengthBar) {
+          passStrengthBar.style.width = '65%';
+          passStrengthBar.style.backgroundColor = 'var(--warning)';
+        }
+        if (passStrengthLabel) passStrengthLabel.textContent = 'Password strength: Moderate';
+      } else {
+        if (passStrengthBar) {
+          passStrengthBar.style.width = '100%';
+          passStrengthBar.style.backgroundColor = 'var(--success)';
+        }
+        if (passStrengthLabel) passStrengthLabel.textContent = 'Password strength: Very Strong (high entropy)';
+      }
+    });
+  }
+
+  // Sign In Handler
+  if (btnLoginSubmit) {
+    btnLoginSubmit.addEventListener('click', async () => {
+      const username = loginUsername ? loginUsername.value.trim() : '';
+      const password = loginPassword ? loginPassword.value : '';
+
+      if (!username || !password) {
+        showToast('Please enter both username and password.', 'warning');
+        return;
+      }
+
+      if (loginSpinner) loginSpinner.style.display = 'inline-block';
+      btnLoginSubmit.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (loginSpinner) loginSpinner.style.display = 'none';
+        btnLoginSubmit.disabled = false;
+
+        if (res.ok && data.success) {
+          localStorage.setItem('mca_auth_token', data.token);
+          localStorage.setItem('mca_auth_user', JSON.stringify(data.user));
+          setLoggedInState(data.user, data.algorithmUsed);
+          showToast(`Welcome ${data.user.full_name}! Authenticated via ${data.algorithmUsed ? data.algorithmUsed.toUpperCase() : 'AegisHash'}.`, 'success');
+        } else {
+          showToast(data.message || 'Login failed.', 'error');
+        }
+      } catch (err) {
+        if (loginSpinner) loginSpinner.style.display = 'none';
+        btnLoginSubmit.disabled = false;
+        showToast('Network error during login.', 'error');
+      }
+    });
+  }
+
+  // Register Handler
+  if (btnRegisterSubmit) {
+    btnRegisterSubmit.addEventListener('click', async () => {
+      const username = regUsername ? regUsername.value.trim() : '';
+      const full_name = regUserFullName ? regUserFullName.value.trim() : '';
+      const email = regEmail ? regEmail.value.trim() : '';
+      const password = regPassword ? regPassword.value : '';
+      const role = regRole ? regRole.value : 'student';
+      const algorithm = regAlgorithm ? regAlgorithm.value : 'aegis256';
+
+      if (!username || !full_name || !email || !password) {
+        showToast('Please complete all required fields.', 'warning');
+        return;
+      }
+
+      if (password.length < 6) {
+        showToast('Password must be at least 6 characters.', 'warning');
+        return;
+      }
+
+      if (regSpinner) regSpinner.style.display = 'inline-block';
+      btnRegisterSubmit.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, full_name, email, password, role, algorithm })
+        });
+        const data = await res.json();
+
+        if (regSpinner) regSpinner.style.display = 'none';
+        btnRegisterSubmit.disabled = false;
+
+        if (res.ok && data.success) {
+          localStorage.setItem('mca_auth_token', data.token);
+          localStorage.setItem('mca_auth_user', JSON.stringify(data.user));
+          setLoggedInState(data.user, data.user.algorithm);
+          showToast(`Account created & password hashed via ${data.user.algorithm.toUpperCase()}!`, 'success');
+          loadDatabaseUsers();
+        } else {
+          showToast(data.message || 'Registration failed.', 'error');
+        }
+      } catch (err) {
+        if (regSpinner) regSpinner.style.display = 'none';
+        btnRegisterSubmit.disabled = false;
+        showToast('Network error during registration.', 'error');
+      }
+    });
+  }
+
+  // Logout Handler
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      const token = localStorage.getItem('mca_auth_token');
+      if (token) {
+        try {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } catch (_) {}
+      }
+      localStorage.removeItem('mca_auth_token');
+      localStorage.removeItem('mca_auth_user');
+      setLoggedOutState();
+      showToast('Logged out successfully.', 'info');
+    });
+  }
+
+  // Header Sign In button
+  if (headerLoginBtn) {
+    headerLoginBtn.addEventListener('click', () => {
+      if (!authSection) return;
+      authSection.style.display = authSection.style.display === 'none' ? 'block' : 'none';
+      if (authSection.style.display === 'block') {
+        authSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  }
+
+  // Bypass directly to Password Security Lab
+  if (btnBypassToLab) {
+    btnBypassToLab.addEventListener('click', () => {
+      if (authSection) authSection.style.display = 'none';
+      if (portalScreen) portalScreen.style.display = 'block';
+      switchTab('securityTab');
+    });
+  }
+
+  function setLoggedInState(user, algo) {
+    currentAuthUser = user;
+    if (authSection) authSection.style.display = 'none';
+    if (portalScreen) portalScreen.style.display = 'block';
+    if (headerLoginBtn) headerLoginBtn.style.display = 'none';
+    if (userHeaderProfile) {
+      userHeaderProfile.style.display = 'flex';
+      const initials = (user.full_name || user.username || 'U')
+        .split(' ')
+        .map(n => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+      if (userHeaderAvatar) userHeaderAvatar.textContent = initials;
+      if (userHeaderName) userHeaderName.textContent = user.full_name || user.username;
+      if (userHeaderRole) {
+        userHeaderRole.textContent = `${(user.role || 'user').toUpperCase()} • ${user.algorithm || algo || 'AEGIS256'}`;
+      }
+    }
+  }
+
+  function setLoggedOutState() {
+    currentAuthUser = null;
+    if (authSection) authSection.style.display = 'block';
+    if (portalScreen) portalScreen.style.display = 'block';
+    if (headerLoginBtn) headerLoginBtn.style.display = 'inline-flex';
+    if (userHeaderProfile) userHeaderProfile.style.display = 'none';
+  }
+
+  async function checkInitialAuth() {
+    const token = localStorage.getItem('mca_auth_token');
+    const cachedUser = localStorage.getItem('mca_auth_user');
+
+    if (!token) {
+      setLoggedOutState();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        setLoggedInState(data.user, data.user.algorithm);
+      } else {
+        localStorage.removeItem('mca_auth_token');
+        localStorage.removeItem('mca_auth_user');
+        setLoggedOutState();
+      }
+    } catch (_) {
+      if (cachedUser) {
+        try {
+          setLoggedInState(JSON.parse(cachedUser));
+        } catch (e) {
+          setLoggedOutState();
+        }
+      } else {
+        setLoggedOutState();
+      }
+    }
+  }
+
+  // =========================================================================
+  // PASSWORD SECURITY LAB & NOVEL ALGORITHM BENCHMARK CONTROLLER
+  // =========================================================================
+
+  const labPasswordInput = document.getElementById('labPasswordInput');
+  const labAlgoSelect = document.getElementById('labAlgoSelect');
+  const labRoundsSelect = document.getElementById('labRoundsSelect');
+  const btnCalculateHash = document.getElementById('btnCalculateHash');
+  const btnHashSpinner = document.getElementById('btnHashSpinner');
+  const toggleLabPassVisibility = document.getElementById('toggleLabPassVisibility');
+
+  const outputAlgoPill = document.getElementById('outputAlgoPill');
+  const metricLatency = document.getElementById('metricLatency');
+  const metricBitLength = document.getElementById('metricBitLength');
+  const metricSaltSize = document.getElementById('metricSaltSize');
+  const outputSalt = document.getElementById('outputSalt');
+  const outputFormattedHash = document.getElementById('outputFormattedHash');
+  const verificationText = document.getElementById('verificationText');
+  const copySaltBtn = document.getElementById('copySaltBtn');
+  const copyHashBtn = document.getElementById('copyHashBtn');
+  const traceStepsContainer = document.getElementById('traceStepsContainer');
+
+  const btnRunBenchmark = document.getElementById('btnRunBenchmark');
+  const benchmarkTableBody = document.getElementById('benchmarkTableBody');
+
+  const btnRunAvalanche = document.getElementById('btnRunAvalanche');
+  const avalancheOrigPass = document.getElementById('avalancheOrigPass');
+  const avalancheOrigHash = document.getElementById('avalancheOrigHash');
+  const avalancheModPass = document.getElementById('avalancheModPass');
+  const avalancheModHash = document.getElementById('avalancheModHash');
+  const sacBitsFlippedText = document.getElementById('sacBitsFlippedText');
+  const sacPercentageBadge = document.getElementById('sacPercentageBadge');
+  const sacProgressBar = document.getElementById('sacProgressBar');
+  const sacVerdictText = document.getElementById('sacVerdictText');
+
+  const btnRefreshDbUsers = document.getElementById('btnRefreshDbUsers');
+  const dbUsersTableBody = document.getElementById('dbUsersTableBody');
+  const btnPrintAssignmentReport = document.getElementById('btnPrintAssignmentReport');
+
+  const presetBtns = document.querySelectorAll('.preset-btn');
+
+  setupPassToggle(toggleLabPassVisibility, labPasswordInput);
+
+  // Preset buttons
+  presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (labPasswordInput) {
+        labPasswordInput.value = btn.dataset.pass;
+        computePasswordHash();
+      }
+    });
+  });
+
+  // Copy Salt & Copy Hash
+  if (copySaltBtn && outputSalt) {
+    copySaltBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(outputSalt.textContent);
+      showToast('Salt copied to clipboard!', 'success');
+    });
+  }
+  if (copyHashBtn && outputFormattedHash) {
+    copyHashBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(outputFormattedHash.textContent);
+      showToast('Formatted hash token copied to clipboard!', 'success');
+    });
+  }
+
+  // Compute Password Hash
+  async function computePasswordHash() {
+    if (!labPasswordInput) return;
+    const password = labPasswordInput.value || 'MCA2024!Secure';
+    const algorithm = labAlgoSelect ? labAlgoSelect.value : 'aegis256';
+    const rounds = labRoundsSelect ? parseInt(labRoundsSelect.value, 10) : 12000;
+
+    if (btnHashSpinner) btnHashSpinner.style.display = 'inline-block';
+    if (btnCalculateHash) btnCalculateHash.disabled = true;
+
+    try {
+      const res = await fetch('/api/security/hash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, algorithm, rounds, withTrace: true })
+      });
+      const data = await res.json();
+
+      if (btnHashSpinner) btnHashSpinner.style.display = 'none';
+      if (btnCalculateHash) btnCalculateHash.disabled = false;
+
+      if (res.ok && data.success && data.result) {
+        renderHashResult(data.result);
+      } else {
+        showToast(data.message || 'Hashing failed.', 'error');
+      }
+    } catch (err) {
+      if (btnHashSpinner) btnHashSpinner.style.display = 'none';
+      if (btnCalculateHash) btnCalculateHash.disabled = false;
+      showToast('Error connecting to cryptographic service.', 'error');
+    }
+  }
+
+  function renderHashResult(res) {
+    if (outputAlgoPill) {
+      outputAlgoPill.textContent = res.algorithm.toUpperCase();
+      outputAlgoPill.className = res.algorithm === 'aegis256' ? 'badge-success highlight' : 'badge-primary';
+    }
+    if (metricLatency) metricLatency.textContent = `${res.executionTimeMs} ms`;
+    if (metricBitLength) metricBitLength.textContent = `${res.bitLength || 256} bits`;
+    if (metricSaltSize) metricSaltSize.textContent = res.salt ? `${(res.salt.length / 2) * 8} bits (${res.salt.length / 2} B)` : 'None (Unsalted)';
+    if (outputSalt) outputSalt.textContent = res.salt || 'None (Legacy unsalted)';
+    if (outputFormattedHash) outputFormattedHash.textContent = res.formattedHash;
+
+    if (verificationText) {
+      verificationText.textContent = res.algorithm === 'aegis256'
+        ? 'Stored in SQLite • Timing-Safe Constant-Time Verification'
+        : `Verified via ${res.algorithm.toUpperCase()}`;
+    }
+
+    // Render step-by-step trace
+    if (traceStepsContainer && res.trace && res.trace.length > 0) {
+      traceStepsContainer.innerHTML = res.trace.map(t => `
+        <div class="trace-step-card">
+          <div class="trace-num">${t.step}</div>
+          <div class="trace-info">
+            <strong>${escapeHtml(t.title)}</strong>
+            <p>${escapeHtml(t.detail)}</p>
+            <code>${escapeHtml(t.value)}</code>
+          </div>
+        </div>
+      `).join('');
+    } else if (traceStepsContainer) {
+      traceStepsContainer.innerHTML = `
+        <div class="trace-step-card">
+          <div class="trace-num">✓</div>
+          <div class="trace-info">
+            <strong>${escapeHtml(res.algorithm.toUpperCase())} Execution</strong>
+            <p>${escapeHtml(res.notes || 'Executed standard hash transformation.')}</p>
+            <code>${escapeHtml(res.rawHash)}</code>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  if (btnCalculateHash) {
+    btnCalculateHash.addEventListener('click', computePasswordHash);
+  }
+
+  // Multi-Algorithm Benchmark
+  async function runAlgorithmBenchmark() {
+    if (!labPasswordInput) return;
+    const password = labPasswordInput.value || 'MCA2024!Secure';
+
+    if (benchmarkTableBody) {
+      benchmarkTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem;">⚡ Computing benchmarks across all 5 algorithms...</td></tr>`;
+    }
+
+    try {
+      const res = await fetch('/api/security/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success && data.comparison) {
+        benchmarkTableBody.innerHTML = data.comparison.map(c => `
+          <tr style="${c.algorithm === 'aegis256' ? 'background: #f0fdf4; font-weight: 600;' : ''}">
+            <td>
+              <strong>${c.algorithm === 'aegis256' ? '⭐ ' : ''}${c.algorithm.toUpperCase()}</strong>
+            </td>
+            <td>${c.algorithm === 'aegis256' ? 'Dynamic Salt-Matrix Diffusion' : c.algorithm === 'pbkdf2' ? 'PBKDF2 Key Stretching' : c.algorithm === 'sha256_salt' ? 'Salted Hash' : c.algorithm === 'hmac_sha512' ? 'Keyed HMAC' : 'Legacy Unsalted'}</td>
+            <td>${c.hasSalt ? `✅ ${c.saltLengthBytes * 8}-bit CSPRNG` : '❌ None'}</td>
+            <td>${c.rounds.toLocaleString()}</td>
+            <td><code>${c.executionTimeMs} ms</code></td>
+            <td>${c.rainbowTableImmune ? '<span style="color:var(--success); font-weight:700;">✅ Immune</span>' : '<span style="color:var(--danger); font-weight:700;">❌ Vulnerable</span>'}</td>
+            <td>${c.gpuResistance}</td>
+            <td>${c.securityRating}</td>
+          </tr>
+        `).join('');
+      }
+    } catch (err) {
+      if (benchmarkTableBody) {
+        benchmarkTableBody.innerHTML = `<tr><td colspan="8" style="color:var(--danger);">Error running benchmark.</td></tr>`;
+      }
+    }
+  }
+
+  if (btnRunBenchmark) {
+    btnRunBenchmark.addEventListener('click', runAlgorithmBenchmark);
+  }
+
+  // Avalanche Effect Test
+  async function runAvalancheTest() {
+    if (!labPasswordInput) return;
+    const password = labPasswordInput.value || 'MCA2024!Secure';
+
+    try {
+      const res = await fetch('/api/security/avalanche', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success && data.avalanche) {
+        const a = data.avalanche;
+        if (avalancheOrigPass) avalancheOrigPass.textContent = a.originalPassword;
+        if (avalancheOrigHash) avalancheOrigHash.textContent = a.originalHash;
+        if (avalancheModPass) avalancheModPass.textContent = a.modifiedPassword;
+        if (avalancheModHash) avalancheModHash.textContent = a.modifiedHash;
+        if (sacBitsFlippedText) sacBitsFlippedText.textContent = `${a.flippedBits} out of ${a.totalBits} bits flipped`;
+        if (sacPercentageBadge) {
+          sacPercentageBadge.textContent = `${a.flippedPercentage}% SAC Diffusion`;
+          sacPercentageBadge.className = a.passedSacCriteria ? 'badge-success highlight' : 'badge-warning';
+        }
+        if (sacProgressBar) sacProgressBar.style.width = `${a.flippedPercentage}%`;
+        if (sacVerdictText) {
+          sacVerdictText.textContent = `✅ Result: ${a.verdict}`;
+        }
+      }
+    } catch (err) {
+      showToast('Error testing avalanche effect.', 'error');
+    }
+  }
+
+  if (btnRunAvalanche) {
+    btnRunAvalanche.addEventListener('click', runAvalancheTest);
+  }
+
+  // SQLite Database Users Inspector
+  async function loadDatabaseUsers() {
+    if (!dbUsersTableBody) return;
+
+    try {
+      const res = await fetch('/api/auth/users');
+      const data = await res.json();
+
+      if (res.ok && data.success && data.users) {
+        dbUsersTableBody.innerHTML = data.users.map(u => `
+          <tr>
+            <td><code>#${u.id}</code></td>
+            <td><strong>${escapeHtml(u.username)}</strong></td>
+            <td>${escapeHtml(u.full_name)}</td>
+            <td><span class="user-role-badge">${escapeHtml(u.role)}</span></td>
+            <td><span class="badge-success" style="font-size:0.75rem;">${escapeHtml(u.algorithm.toUpperCase())}</span></td>
+            <td><code>${escapeHtml(u.salt)}</code></td>
+            <td><code title="${escapeHtml(u.fullFormattedHash || '')}">${escapeHtml(u.maskedHash)}</code></td>
+            <td><small>${u.created_at ? u.created_at.split('T')[0] : 'Seeded'}</small></td>
+          </tr>
+        `).join('');
+      }
+    } catch (err) {
+      if (dbUsersTableBody) {
+        dbUsersTableBody.innerHTML = `<tr><td colspan="8" style="color:var(--danger);">Error loading users from database.</td></tr>`;
+      }
+    }
+  }
+
+  if (btnRefreshDbUsers) {
+    btnRefreshDbUsers.addEventListener('click', loadDatabaseUsers);
+  }
+
+  // Print Assignment Report
+  if (btnPrintAssignmentReport) {
+    btnPrintAssignmentReport.addEventListener('click', () => {
+      document.body.classList.add('printing-assignment');
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-assignment');
+      }, 1000);
+    });
+  }
+
+  function loadSecurityLab() {
+    computePasswordHash();
+    runAlgorithmBenchmark();
+    runAvalancheTest();
+    loadDatabaseUsers();
+  }
+
+  // Initialize Auth state
+  checkInitialAuth();
 
   // Initial Data Fetch
   fetchStats();

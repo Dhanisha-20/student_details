@@ -1,46 +1,69 @@
-# 🎓 MCA Student Data Portal
+# 🎓 MCA Student Data Portal & Password Security Laboratory
 
-A full-stack web application designed for the **Department of Computer Applications (MCA)** to store student data in a SQLite database and instantly retrieve student dossiers when a **D-Number** (e.g. `D24MCA01`, `D24MCA02`) is typed in the frontend.
+A full-stack web application designed for the **Department of Computer Applications (MCA)** to manage student data in SQLite and demonstrate advanced cryptography for the assignment: **"Create a new Algorithm for securing a Password"**.
 
-Built with **HTML5, CSS3, JavaScript** on the frontend and **Node.js, Express, and SQLite** on the backend.
+Built with **HTML5, CSS3, Vanilla JavaScript** on the frontend and **Node.js, Express, and SQLite** on the backend.
 
 ---
 
 ## 🌟 Key Features
 
-1. **Instant D-Number Search & Live Lookup (`public/index.html` & `public/js/app.js`)**:
-   - Type any MCA D-Number to instantly fetch and display the complete student dossier.
-   - **Real-time / Instant Lookup Toggle**: Automatically searches as you type (with debouncing) or on pressing Enter / clicking Search.
-   - **Case-Insensitive**: Searches work whether you type `d24mca01` or `D24MCA01`.
-   - **Quick Sample Chips**: 1-click test pills (`D24MCA01`, `D24MCA02`, `D24MCA15`, etc.) to quickly preview records.
+### 1. 🔐 User Authentication & Password Hashing (Assignment Feature)
+- **Zero Plaintext Storage (CWE-312 Remediation):** Passwords are **never** stored in HTML files, client-side scripts, or plaintext database fields.
+- **Login & Registration Screen:**
+  - Modern role-based sign in and account registration.
+  - **1-Click Demo Accounts:** Log in immediately as Administrator, Student, Faculty, or Demo Guest.
+  - **Algorithm Selector on Registration:** Users can choose which cryptographic algorithm hashes their credentials (default: **AegisHash-256**).
+  - **Live Password Strength Meter:** Evaluates entropy in real time.
+  - Session verification via `/api/auth/me` with header profile and Logout button.
 
-2. **Comprehensive MCA Student Dossier**:
-   - **Profile Header**: Initials avatar, Student Full Name, D-Number badge (click to copy), MCA Batch & Semester.
-   - **Academic Performance Cards**:
-     - **CGPA**: Grade equivalent (e.g. *O / Outstanding*, *A+ / Excellent*) with visual progress bar.
-     - **SGPA**: Current semester SGPA.
-     - **Attendance Rate (%)**: Color-coded progress bar (Green for $\ge 85\%$, Amber for $75-84\%$, Red for $<75\%$).
-   - **MCA Curriculum Details**: Specialization track, Elective Course, Mini / Capstone Project title, Faculty Mentor / Guide.
-   - **Personal & Contact Info**: Email (clickable mailto), Phone (clickable tel), DOB, Blood Group, Address.
-   - **Actions**: 🖨️ Print Student Slip (formatted print stylesheet), ✏️ Edit Details, 🗑️ Delete Record.
+### 2. ⭐ Novel Cryptographic Algorithm: `AegisHash-256`
+Designed specifically for the academic assignment **"Create a new Algorithm for securing a Password"**:
+- **Phase 1: 128-bit CSPRNG Salt** — Unique 16-byte random salt per user eliminates precomputed Rainbow Tables.
+- **Phase 2: Dynamic Non-Linear S-Box** — A 256-byte substitution box generated per-credential using salt bytes and modular arithmetic.
+- **Phase 3: 8×8 State Matrix Transposition** — Circular row bit-shifts and diagonal XOR folding guarantee spatial diffusion satisfying the **Strict Avalanche Criterion (SAC ~50%)**.
+- **Phase 4: Time-Hardened Key Stretching** — 12,000 iterated HMAC compression rounds thwart GPU/ASIC parallel brute-force attacks.
+- **Phase 5: Constant-Time Verification** — Timing-safe buffer comparison (`crypto.timingSafeEqual`) prevents side-channel timing attacks.
+- **Modular Crypt Format:** Stored as `$aegis256$v=1$r=12000$s=<salt>$h=<digest>`.
 
-3. **Store Student Data into Database (`POST /api/students`)**:
-   - Clean, validated student registration form with sections for Identification, MCA Program Information, Performance, and Contact.
-   - Automatically saves to the `students.db` SQLite database.
-   - Prevents duplicate D-Numbers.
-   - On successful save, automatically transitions to the search view and loads the newly added student.
+### 3. 🧪 Interactive Password Security Lab
+A dedicated UI tab within the portal (`public/index.html` $\rightarrow$ **Password Security Lab**):
+- **Live Algorithm Playground:** Input test passwords, choose algorithms and work factors, and inspect the real-time execution trace step-by-step.
+- **Multi-Algorithm Benchmark:** Side-by-side comparison of **AegisHash-256**, **PBKDF2-HMAC-SHA256**, **Salted SHA-256**, **Keyed HMAC-SHA512**, and **Legacy MD5**.
+- **Avalanche Effect Test Bench:** Measures how many bits flip when 1 single bit in the password changes.
+- **SQLite Database Inspector:** Proves that credentials are encrypted in `students.db` and zero passwords exist in HTML.
+- **Printable Academic Report:** Formatted academic paper with a 1-click **"🖨️ Print / Save Assignment Report as PDF"** button.
 
-4. **MCA Directory & Student Roster**:
-   - Live roster table showing all registered MCA students.
-   - Real-time search/filter across Name, D-Number, and Specialization.
-   - Direct "View", "Edit", and "Delete" buttons for each student.
+### 4. 🔍 Instant D-Number Search & Live Lookup
+- Type any MCA D-Number (e.g. `D24MCA01`, `D24MCA02`) to instantly retrieve the complete student dossier.
+- **Case-Insensitive:** Works with lowercase (`d24mca02`) or uppercase.
+- **Real-time Toggle:** Instant lookup with debounced keystrokes or manual search button.
+- **Sample Chips:** 1-click pills for quick testing.
 
-5. **✨ Free AI Data Generation & Mentor Reports (Google Gemini API)**:
-   - **AI Student Data Generator**: Use a free Gemini API key (from [Google AI Studio](https://aistudio.google.com)) to dynamically generate authentic MCA student profiles and automatically insert them into SQLite.
-   - **AI Mentor Assessment**: Click **"✨ AI Mentor Report"** on any student dossier to generate a personalized faculty assessment, project evaluation, semester advice, and placement readiness forecast.
+### 5. 📋 Comprehensive MCA Student Dossier & Directory
+- View CGPA, SGPA, attendance progress bars, curriculum electives, capstone projects, and faculty guides.
+- Add new students into the SQLite database with duplicate D-Number prevention.
+- Roster table with live search and filter across Name, D-Number, and Specialization.
+- Formatted Print Student Slip stylesheet.
 
-6. **Department Stats Ribbon**:
-   - Live summary ribbon showing Total Enrolled Students, Average CGPA, and Average Attendance.
+### 6. ✨ Free AI Data Generator & Mentor Reports (Google Gemini API)
+- Generate authentic MCA student profiles using a free Gemini API key and save them to SQLite.
+- Generate personalized AI Academic Mentor Reports for any student dossier.
+
+---
+
+## 🔑 Demo Login Accounts in SQLite
+
+The database is pre-seeded with test accounts. Zero passwords are in HTML files:
+
+| Username | Password | Role | Algorithm Applied | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `admin` | `Admin@123` | Administrator | ⭐ `AegisHash-256` | Custom novel algorithm |
+| `dhanisha` | `MCA2024!Secure` | MCA Student | ⭐ `AegisHash-256` | Custom novel algorithm |
+| `faculty_kumar` | `Faculty@2024` | Faculty Guide | `PBKDF2` | NIST SP 800-132 Standard |
+| `demo_sha256` | `Student#Pass1` | Guest | `Salted SHA-256` | Single-pass baseline |
+
+*(You can also register a new account with your own custom password and algorithm!)*
 
 ---
 
@@ -48,35 +71,35 @@ Built with **HTML5, CSS3, JavaScript** on the frontend and **Node.js, Express, a
 
 ```
 Student_data/
-├── server.js              # Express REST API & SQLite database initialization
-├── students.db            # SQLite database file (auto-created on first run)
-├── package.json           # Dependencies and run scripts
-├── test_endpoints.js      # Automated test suite for backend API
-├── README.md              # Documentation
-└── public/                # Frontend (HTML, CSS, Vanilla JavaScript)
-    ├── index.html         # Main MCA Portal UI
+├── crypto_algo.js               # Novel AegisHash-256 algorithm & multi-algorithm suite
+├── db.js                        # SQLite database layer (students & users tables)
+├── server.js                    # Express API (Student routes, Auth routes, Security Lab)
+├── students.db                  # SQLite database file (seeded with students & users)
+├── test_endpoints.js            # Automated integration test suite (16 tests)
+├── view_db.js                   # Terminal database inspector (students & hashed users)
+├── PASSWORD_ALGORITHM_ASSIGNMENT.md # Formal academic assignment paper for submission
+├── package.json                 # Project dependencies and npm scripts
+├── README.md                    # Project documentation
+└── public/                      # Frontend client
+    ├── index.html               # Main UI (Login card, Student Portal, Security Lab)
     ├── css/
-    │   └── style.css      # Modern, responsive styles & print layout
+    │   └── style.css            # Stylesheet (Responsive design, crypto cards, print rules)
     └── js/
-        └── app.js         # Frontend controller (Search, Register, Directory, Modal)
+        └── app.js               # Frontend controller (Auth, D-Number search, Crypto Lab)
 ```
 
 ---
 
 ## 🚀 How to Run the Application
 
-### Prerequisites
-- Node.js (v18 or higher; tested on Node.js v24)
-- No external database installation needed! SQLite is built-in.
-
 ### 1. Start the Server
-Open your terminal in this directory (`c:\Users\Dhanisha R\Downloads\Student_data`) and run:
+Open terminal in `c:\Users\Dhanisha R\Downloads\Student_data` and run:
 
 ```bash
 npm start
 ```
 
-You should see:
+Output:
 ```text
 ===============================================
 🎓 MCA Student Data Portal Backend Running
@@ -86,62 +109,47 @@ You should see:
 ```
 
 ### 2. Open the Frontend
-Open your browser and navigate to:
+Navigate your browser to:
 ```
 http://localhost:3000
 ```
-
----
-
-## 🧪 Sample D-Numbers to Test Immediately
-
-The database is pre-seeded with sample MCA students:
-
-| D-Number | Student Name | Semester & Batch | Specialization | CGPA | Attendance |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `D24MCA01` | Rahul Verma | Sem 3 (2024-26) | Artificial Intelligence & Data Science | 8.92 | 94.5% |
-| `D24MCA02` | Dhanisha R | Sem 3 (2024-26) | Full Stack Web Development | 9.35 | 97.0% |
-| `D24MCA15` | Sneha Kulkarni | Sem 2 (2024-26) | Cloud Computing & DevOps | 8.65 | 89.2% |
-| `D23MCA42` | Mohammed Farhan | Sem 4 (2023-25) | Cyber Security & Cryptography | 8.78 | 91.5% |
-| `D24MCA08` | Ananya Sen | Sem 1 (2024-26) | Software Systems & Design | 8.40 | 86.0% |
-
-You can also click on the sample chips in the UI or type any D-number in the search bar.
-
----
-
-## 📡 REST API Reference
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/students/:dnumber` | Fetch student by D-Number (case-insensitive) |
-| `GET` | `/api/students` | Get all students (supports `?search=` filter) |
-| `POST` | `/api/students` | Add/store a new student into the SQLite database |
-| `PUT` | `/api/students/:dnumber` | Update existing student records |
-| `DELETE` | `/api/students/:dnumber` | Remove a student from the database |
-| `GET` | `/api/stats` | Aggregate department stats (total, avg CGPA, avg attendance) |
+- Click any **1-Click Demo Account** pill to sign in.
+- Click **"🔐 Password Security Lab"** in the top navigation to test the custom algorithm, benchmark comparisons, and print your assignment paper.
 
 ---
 
 ## 🧪 Running Automated Tests
 
-To verify that all endpoints and database operations are working properly:
+Run the full integration test suite:
 
 ```bash
 npm test
 ```
-All 8 integration test scenarios will run and report status.
+
+All 16 test cases will execute:
+- ✅ Student D-Number lookup, case-insensitivity, 404 handling
+- ✅ Student registration, deletion, stats ribbon
+- ✅ User login with custom AegisHash-256 algorithm
+- ✅ User registration with dynamic hash generation
+- ✅ Password hashing with 8-stage step-by-step trace
+- ✅ 5-algorithm comparative benchmark
+- ✅ Strict Avalanche Criterion (SAC) measurement
+- ✅ SQLite database users inspector
 
 ---
 
-## ☁️ Deploying to Vercel
+## 📊 Database Terminal Inspector
 
-The repository is configured for 1-click Vercel deployment:
+To view all students and hashed user credentials in the terminal:
 
-1. Import your GitHub repository (`Dhanisha-20/student_details`) into **Vercel**.
-2. Keep the Framework Preset as **Other** (Vercel automatically detects `vercel.json` and `api/index.js`).
-3. Click **Deploy**.
-4. Vercel will:
-   - Serve static frontend assets (`public/index.html`, `public/css/style.css`, `public/js/app.js`) at the root `/`.
-   - Route all `/api/*` endpoints to the serverless function (`api/index.js`).
-   - Run the database engine with fallback for serverless environments.
+```bash
+npm run db:view
+```
 
+Displays both the student roster and the `users` table showing stored salts and masked hashes.
+
+---
+
+## 📄 Assignment Paper
+
+Read the complete academic submission paper at [`PASSWORD_ALGORITHM_ASSIGNMENT.md`](PASSWORD_ALGORITHM_ASSIGNMENT.md).

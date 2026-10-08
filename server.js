@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./db');
+const { MultiAlgorithmEngine, AegisHash256 } = require('./crypto_algo');
 const { generateStudentWithAI, generateAcademicReport } = require('./gemini');
 
 const app = express();
@@ -11,6 +13,33 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// In-memory session store
+const SESSIONS = new Map();
+
+function createSession(user) {
+  const token = 'mca_token_' + crypto.randomBytes(24).toString('hex');
+  const sessionData = {
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + (24 * 60 * 60 * 1000)
+  };
+  SESSIONS.set(token, sessionData);
+  return token;
+}
+
+function getSessionUser(token) {
+  if (!token) return null;
+  const session = SESSIONS.get(token);
+  if (!session) return null;
+  if (Date.now() > session.expiresAt) {
+    SESSIONS.delete(token);
+    return null;
+  }
+  return db.getUserById(session.userId);
+}
 
 // Serve static assets from public folder as well as root
 app.use(express.static(path.join(__dirname, 'public')));
@@ -220,6 +249,226 @@ app.post('/api/ai/academic-report', async (req, res) => {
       message: error.message || 'Failed to generate academic report.'
     });
   }
+});
+
+// ======================== USER AUTHENTICATION API ROUTES ========================
+
+// 9. POST /api/auth/login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'Username and password are required.' });
+    }
+
+    const cleanUser = username.trim().toLowerCase();
+    const user = db.getUserByUsername(cleanUser) || db.getUserByEmail(cleanUser);
+    if (!user) {
+      return res.status(401).json({ success: false, message: `Account "${username}" was not found.` });
+    }
+
+    const isValid = MultiAlgorithmEngine.verifyPassword(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: 'Incorrect password provided.' });
+    }
+
+    db.updateUserLastLogin(user.id);
+    const token = createSession(user);
+    const safeUser = db.sanitizeUser(user);
+
+    res.json({
+      success: true,
+      message: `Welcome back, ${safeUser.full_name}!`,
+      token,
+      user: safeUser,
+      algorithmUsed: user.algorithm
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ success: false, message: 'Authentication failed.', error: error.message });
+  }
+});
+
+// 10. POST /api/auth/register
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { username, full_name, email, password, role, algorithm } = req.body;
+
+    if (!username || !password || !email || !full_name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, Full Name, Email, and Password are all required.'
+      });
+    }
+
+    const created = db.createUser({
+      username,
+      full_name,
+      email,
+      password,
+      role: role || 'student',
+      algorithm: algorithm || 'aegis256'
+    });
+
+    const token = createSession(created);
+
+    res.status(201).json({
+      success: true,
+      message: `User ${created.username} registered successfully using ${created.algorithm.toUpperCase()} algorithm!`,
+      token,
+      user: created
+    });
+  } catch (error) {
+    if (error.code === 'DUPLICATE_USER') {
+      return res.status(409).json({ success: false, message: error.message });
+    }
+    console.error('Registration error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Registration failed.' });
+  }
+});
+
+// 11. GET /api/auth/me (Check active session)
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || req.query.token;
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'No authentication token provided.' });
+  }
+
+  const user = getSessionUser(token);
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Session expired or invalid token.' });
+  }
+
+  res.json({ success: true, user });
+});
+
+// 12. POST /api/auth/logout
+app.post('/api/auth/logout', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (token) {
+    SESSIONS.delete(token);
+  }
+  res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// 13. GET /api/auth/users (Public user inspector for academic demonstration)
+app.get('/api/auth/users', (req, res) => {
+  try {
+    const users = db.getAllUsers();
+    res.json({
+      success: true,
+      count: users.length,
+      users
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to retrieve user list.', error: error.message });
+  }
+});
+
+// ======================== PASSWORD SECURITY & ALGORITHM LAB ========================
+
+// 14. POST /api/security/hash (Calculate hash with step-by-step trace)
+app.post('/api/security/hash', (req, res) => {
+  try {
+    const { password, algorithm, withTrace } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required to compute hash.' });
+    }
+
+    const algo = algorithm || 'aegis256';
+    const result = MultiAlgorithmEngine.hashPassword(algo, password, null, Boolean(withTrace));
+
+    res.json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('Hashing error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 15. POST /api/security/compare (Multi-algorithm comparative benchmark)
+app.post('/api/security/compare', (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required for comparative benchmark.' });
+    }
+
+    const comparison = MultiAlgorithmEngine.runComparativeBenchmark(password);
+    res.json({
+      success: true,
+      passwordLength: password.length,
+      comparison
+    });
+  } catch (error) {
+    console.error('Benchmark error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 16. POST /api/security/avalanche (Avalanche effect test)
+app.post('/api/security/avalanche', (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required for avalanche test.' });
+    }
+
+    const avalanche = MultiAlgorithmEngine.calculateAvalancheEffect(password);
+    res.json({
+      success: true,
+      avalanche
+    });
+  } catch (error) {
+    console.error('Avalanche error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 17. GET /api/security/assignment-report (Academic submission documentation)
+app.get('/api/security/assignment-report', (req, res) => {
+  res.json({
+    success: true,
+    title: 'Create a new Algorithm for securing a Password',
+    candidate: 'MCA Student (D24MCA02 - Dhanisha R)',
+    department: 'Department of Computer Applications',
+    algorithmName: 'AegisHash-256 (Adaptive Entropy-Guided Iterative Salt-Matrix Hashing)',
+    problemStatement: 'Storing passwords in HTML or plaintext files directly exposes sensitive user credentials to any client-side inspector, browser cache, or network packet sniffer. Furthermore, unsalted hashes like legacy MD5 are trivial to invert using precomputed Rainbow Tables containing billions of known hashes.',
+    stages: [
+      {
+        step: 1,
+        title: 'CSPRNG Cryptographic Salting (128-bit)',
+        desc: 'A unique 16-byte cryptographically secure pseudo-random salt is generated per password. Defeats Rainbow Tables and identical password correlation across accounts.'
+      },
+      {
+        step: 2,
+        title: 'Dynamic Salt-Keyed S-Box',
+        desc: 'A 256-byte non-linear substitution box is constructed dynamically for each credential using modular prime arithmetic and salt byte seeding.'
+      },
+      {
+        step: 3,
+        title: '8x8 State Matrix Avalanche Bit Diffusion',
+        desc: 'Diffuses entropy across a 64-byte state matrix through circular row bit-shifts and diagonal XOR transposition, ensuring strict avalanche diffusion (SAC ~50%).'
+      },
+      {
+        step: 4,
+        title: 'Time-Hardened Key Stretching (12,000 Rounds)',
+        desc: 'Applies 12,000 iterated HMAC-SHA256 compression rounds with dynamic round keys derived from state XORs, making brute-force attacks computationally prohibitive on GPUs.'
+      },
+      {
+        step: 5,
+        title: 'Timing-Safe Constant Time Verification',
+        desc: 'Compares digests using constant-time byte equality (crypto.timingSafeEqual), completely neutralizing side-channel timing attacks.'
+      }
+    ],
+    storageStandard: 'Modular Crypt Format: $aegis256$v=1$r=12000$s=<salt>$h=<digest>',
+    storageLocation: 'SQLite database table (users) - Zero passwords in HTML or client files.'
+  });
 });
 
 // Fallback to index.html for SPA behavior

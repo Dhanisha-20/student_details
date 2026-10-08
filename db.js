@@ -9,6 +9,42 @@
 
 const path = require('path');
 const fs = require('fs');
+const { MultiAlgorithmEngine } = require('./crypto_algo');
+
+const SEED_USERS = [
+  {
+    username: 'admin',
+    full_name: 'MCA Department Admin',
+    email: 'admin@mca.edu',
+    role: 'admin',
+    algorithm: 'aegis256',
+    password_plain: 'Admin@123'
+  },
+  {
+    username: 'dhanisha',
+    full_name: 'Dhanisha R',
+    email: 'dhanisha.r@mca.edu',
+    role: 'student',
+    algorithm: 'aegis256',
+    password_plain: 'MCA2024!Secure'
+  },
+  {
+    username: 'faculty_kumar',
+    full_name: 'Prof. Anand Kumar',
+    email: 'anand.kumar@mca.edu',
+    role: 'faculty',
+    algorithm: 'pbkdf2',
+    password_plain: 'Faculty@2024'
+  },
+  {
+    username: 'demo_sha256',
+    full_name: 'Demonstration User (SHA-256)',
+    email: 'demo.sha256@mca.edu',
+    role: 'guest',
+    algorithm: 'sha256_salt',
+    password_plain: 'Student#Pass1'
+  }
+];
 
 const SEED_STUDENTS = [
   {
@@ -117,6 +153,7 @@ class DatabaseManager {
   constructor() {
     this.sqliteDb = null;
     this.memoryStore = [];
+    this.userMemoryStore = [];
     this.useMemoryFallback = false;
     this.init();
   }
@@ -131,7 +168,7 @@ class DatabaseManager {
 
       this.sqliteDb = new DatabaseSync(dbPath);
 
-      // Create schema
+      // Create students schema
       this.sqliteDb.exec(`
         CREATE TABLE IF NOT EXISTS students (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,10 +191,23 @@ class DatabaseManager {
           address TEXT,
           blood_group TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          full_name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          role TEXT DEFAULT 'student',
+          algorithm TEXT NOT NULL,
+          salt TEXT,
+          password_hash TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_login DATETIME
+        );
       `);
 
-      // Seed if empty
+      // Seed students if empty
       const count = this.sqliteDb.prepare('SELECT COUNT(*) as c FROM students').get().c;
       if (count === 0) {
         const stmt = this.sqliteDb.prepare(`
@@ -178,10 +228,47 @@ class DatabaseManager {
           );
         }
       }
+
+      // Seed users if empty
+      const userCount = this.sqliteDb.prepare('SELECT COUNT(*) as c FROM users').get().c;
+      if (userCount === 0) {
+        const stmtUser = this.sqliteDb.prepare(`
+          INSERT INTO users (username, full_name, email, role, algorithm, salt, password_hash)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const u of SEED_USERS) {
+          const hashed = MultiAlgorithmEngine.hashPassword(u.algorithm, u.password_plain);
+          stmtUser.run(
+            u.username,
+            u.full_name,
+            u.email,
+            u.role,
+            hashed.algorithm,
+            hashed.salt || '',
+            hashed.formattedHash
+          );
+        }
+      }
     } catch (err) {
       console.warn('SQLite init warning (falling back to in-memory store):', err.message);
       this.useMemoryFallback = true;
       this.memoryStore = JSON.parse(JSON.stringify(SEED_STUDENTS));
+      this.userMemoryStore = SEED_USERS.map((u, idx) => {
+        const hashed = MultiAlgorithmEngine.hashPassword(u.algorithm, u.password_plain);
+        return {
+          id: idx + 1,
+          username: u.username,
+          full_name: u.full_name,
+          email: u.email,
+          role: u.role,
+          algorithm: hashed.algorithm,
+          salt: hashed.salt || '',
+          password_hash: hashed.formattedHash,
+          created_at: new Date().toISOString(),
+          last_login: null
+        };
+      });
     }
   }
 
@@ -368,6 +455,141 @@ class DatabaseManager {
       totalStudents: total,
       averageCgpa: avgCgpa,
       averageAttendance: avgAtt
+    };
+  }
+
+  // ======================== USER AUTHENTICATION & SECURITY ========================
+
+  createUser(data) {
+    const cleanUsername = (data.username || '').trim().toLowerCase();
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    const cleanFullName = (data.full_name || '').trim();
+    const password = data.password || '';
+    const role = (data.role || 'student').trim().toLowerCase();
+    const algorithm = (data.algorithm || 'aegis256').toLowerCase();
+
+    if (!cleanUsername) throw new Error('Username is required.');
+    if (!cleanEmail) throw new Error('Email is required.');
+    if (!cleanFullName) throw new Error('Full Name is required.');
+    if (!password || password.length < 6) throw new Error('Password must be at least 6 characters long.');
+
+    // Check duplicate
+    const existing = this.getUserByUsername(cleanUsername) || this.getUserByEmail(cleanEmail);
+    if (existing) {
+      const err = new Error(existing.username.toLowerCase() === cleanUsername ? `Username "${cleanUsername}" is already taken.` : `Email "${cleanEmail}" is already registered.`);
+      err.code = 'DUPLICATE_USER';
+      throw err;
+    }
+
+    const hashed = MultiAlgorithmEngine.hashPassword(algorithm, password);
+
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      const stmt = this.sqliteDb.prepare(`
+        INSERT INTO users (username, full_name, email, role, algorithm, salt, password_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        cleanUsername,
+        cleanFullName,
+        cleanEmail,
+        role,
+        hashed.algorithm,
+        hashed.salt || '',
+        hashed.formattedHash
+      );
+      const created = this.getUserByUsername(cleanUsername);
+      return this.sanitizeUser(created);
+    }
+
+    const newUser = {
+      id: Date.now(),
+      username: cleanUsername,
+      full_name: cleanFullName,
+      email: cleanEmail,
+      role,
+      algorithm: hashed.algorithm,
+      salt: hashed.salt || '',
+      password_hash: hashed.formattedHash,
+      created_at: new Date().toISOString(),
+      last_login: null
+    };
+    this.userMemoryStore.push(newUser);
+    return this.sanitizeUser(newUser);
+  }
+
+  getUserByUsername(username) {
+    if (!username) return null;
+    const clean = username.trim().toLowerCase();
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      return this.sqliteDb.prepare('SELECT * FROM users WHERE LOWER(username) = ?').get(clean) || null;
+    }
+    return this.userMemoryStore.find(u => u.username.toLowerCase() === clean) || null;
+  }
+
+  getUserByEmail(email) {
+    if (!email) return null;
+    const clean = email.trim().toLowerCase();
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      return this.sqliteDb.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(clean) || null;
+    }
+    return this.userMemoryStore.find(u => u.email.toLowerCase() === clean) || null;
+  }
+
+  getUserById(id) {
+    if (!id) return null;
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      const row = this.sqliteDb.prepare('SELECT * FROM users WHERE id = ?').get(id);
+      return row ? this.sanitizeUser(row) : null;
+    }
+    const u = this.userMemoryStore.find(x => x.id === id);
+    return u ? this.sanitizeUser(u) : null;
+  }
+
+  getAllUsers() {
+    let list = [];
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      list = this.sqliteDb.prepare('SELECT id, username, full_name, email, role, algorithm, salt, password_hash, created_at, last_login FROM users ORDER BY id ASC').all();
+    } else {
+      list = this.userMemoryStore;
+    }
+
+    return list.map(u => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      email: u.email,
+      role: u.role,
+      algorithm: u.algorithm,
+      salt: u.salt ? (u.salt.substring(0, 8) + '...' + u.salt.substring(Math.max(0, u.salt.length - 4))) : 'N/A',
+      maskedHash: u.password_hash.substring(0, 18) + '••••••••' + u.password_hash.substring(Math.max(0, u.password_hash.length - 12)),
+      fullFormattedHash: u.password_hash,
+      created_at: u.created_at,
+      last_login: u.last_login
+    }));
+  }
+
+  updateUserLastLogin(id) {
+    const now = new Date().toISOString();
+    if (!this.useMemoryFallback && this.sqliteDb) {
+      this.sqliteDb.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(now, id);
+      return;
+    }
+    const u = this.userMemoryStore.find(x => x.id === id);
+    if (u) u.last_login = now;
+  }
+
+  sanitizeUser(user) {
+    if (!user) return null;
+    return {
+      id: user.id,
+      username: user.username,
+      full_name: user.full_name,
+      email: user.email,
+      role: user.role,
+      algorithm: user.algorithm,
+      saltLength: user.salt ? user.salt.length / 2 : 0,
+      created_at: user.created_at,
+      last_login: user.last_login
     };
   }
 }
